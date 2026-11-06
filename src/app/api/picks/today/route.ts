@@ -32,7 +32,7 @@ export async function POST() {
     supabase.from("certificates").select("kind,status,certificate_subjects(subject,grade)").eq("user_id", user.id),
     supabase.from("applications").select("job_id").eq("user_id", user.id),
     supabase.from("daily_picks").select("job_id").eq("user_id", user.id),
-    supabase.from("jobs").select("*").eq("is_active", true),
+    supabase.from("jobs").select("*").eq("is_active", true).neq("source", "curated"),
   ]);
 
   const profile = profileRes.data;

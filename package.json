@@ -9,6 +9,8 @@
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.78.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "next": "^15.5.4",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.1",

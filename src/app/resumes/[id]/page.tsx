@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ResumeSheet } from "@/components/resume-sheet";
 import { Button, Field, PageHeader, controlClass } from "@/components/ui";
+import { downloadResumePdf } from "@/lib/download-resume";
 import { useStore } from "@/lib/store";
 import { makeFields, resumeTemplates, scratchFields, templateById, templateName } from "@/lib/templates";
 import type { ResumeDoc, ResumeField } from "@/lib/types";
@@ -14,7 +16,9 @@ export default function ResumeEditorPage() {
   const record = state.resumes.find((item) => item.id === params.id);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   if (!record) {
     return (
@@ -99,7 +103,7 @@ export default function ResumeEditorPage() {
       <div>
         <PageHeader
           title={current.title}
-          lede={`${current.kind === "cv" ? "CV" : "Resume"} · ${templateName(current.templateId)} · single column, standard headings`}
+          lede={`${current.kind === "cv" ? "CV" : "Resume"} · ${templateName(current.templateId)}. The preview is the page that downloads.`}
         />
         <div className="mb-4 grid gap-3 md:grid-cols-2">
           <Field label="Document title">
@@ -186,36 +190,22 @@ export default function ResumeEditorPage() {
               {busy ? "Writing…" : "Write with AI"}
             </Button>
             <Button
-              tone="ghost"
+              tone="secondary"
+              disabled={downloading}
               onClick={async () => {
+                if (!sheetRef.current) return;
+                setDownloading(true);
                 setError("");
-                const response = await fetch("/api/resumes/pdf", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    id: current.id,
-                    title: current.title,
-                    kind: current.kind,
-                    templateId: current.templateId,
-                    contactLine: current.contactLine,
-                    fields: current.fields,
-                  }),
-                });
-                if (!response.ok) {
-                  const data = (await response.json()) as { error?: string };
-                  setError(data.error || "The PDF was not created.");
-                  return;
+                try {
+                  await downloadResumePdf(sheetRef.current, current.title || "resume");
+                } catch {
+                  setError("The PDF could not be created from this preview.");
+                } finally {
+                  setDownloading(false);
                 }
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `${current.title || "resume"}.pdf`;
-                link.click();
-                URL.revokeObjectURL(url);
               }}
             >
-              Download PDF
+              {downloading ? "Preparing PDF…" : "Download PDF"}
             </Button>
           </div>
           {error ? <p className="mt-3 text-sm text-[#8a3d18]">{error}</p> : null}
@@ -225,17 +215,17 @@ export default function ResumeEditorPage() {
         </div>
       </div>
 
-      <aside className="h-fit rounded-3xl border border-[#d9d0c0] bg-white p-6 text-[#1c1915]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5c564c]">ATS preview · one column</p>
-        <p className="mt-3 font-display text-3xl leading-tight">{state.profile.fullName || "Your name"}</p>
-        <p className="mt-1 text-sm text-[#3d3832]">{current.contactLine || "Add a contact line"}</p>
-        <div className="mt-4 space-y-4">
-          {current.fields.map((field) => (
-            <section key={field.id}>
-              <h2 className="border-b border-[#1c1915] pb-1 text-xs font-semibold uppercase tracking-[0.12em]">{field.label || "Section"}</h2>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{field.value || "This section is empty."}</p>
-            </section>
-          ))}
+      <aside className="lg:sticky lg:top-4 lg:self-start">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#5c564c]">Live preview</p>
+        <div className="inline-block overflow-hidden rounded-2xl bg-[#d7d1c4] p-4 shadow-inner">
+          <div style={{ width: 381, height: 540, overflow: "hidden" }}>
+            <div style={{ transform: "scale(0.48)", transformOrigin: "top left" }}>
+              <ResumeSheet doc={current} name={state.profile.fullName} />
+            </div>
+          </div>
+        </div>
+        <div ref={sheetRef} aria-hidden style={{ position: "fixed", left: "-2400px", top: 0 }}>
+          <ResumeSheet doc={current} name={state.profile.fullName} />
         </div>
       </aside>
     </div>

@@ -29,15 +29,15 @@ export const homeSections: MarketingSection[] = [
   },
   {
     kicker: "Resumes",
-    title: "Ten ATS layouts, or a blank page you build",
+    title: "Ten designed layouts, or a blank page you build",
     paragraphs: [
-      "Pick a template aimed at entry work, NYSC, teaching, sales, care, operations, a graduate seat, a career switch, a compact professional resume, or a full CV. Each one is a single column with ordinary headings.",
+      "Pick a template aimed at entry work, NYSC, teaching, sales, care, operations, a graduate seat, a career switch, a compact professional resume, or a full CV. Each one is a paper page you can see while you type.",
       "You can also start from scratch, rename every heading, and add fields. A template and a blank page can both be written by the AI from your profile, then edited line by line.",
     ],
     points: [
-      "No text inside images, tables, or sidebars.",
+      "The preview is the page that downloads.",
       "You add a field when a template is missing something you need.",
-      "The PDF step comes later. The words are yours now.",
+      "Switching template keeps the lines you already wrote when the headings match.",
     ],
   },
   {
@@ -58,7 +58,7 @@ export const homeSections: MarketingSection[] = [
     title: "A company posts the role and the address that should receive it",
     paragraphs: [
       "An employer adds the title, the city, the certificate rule, and the Gmail for applications. A cashier role that needs five credits including English and Mathematics lands in the O'level lane.",
-      "Sample cards on the desk are labelled Sample. They are there so the product can be walked through before a live feed is connected.",
+      "Roles appear after a seeker searches. The search uses their name, state, certificates, and skills.",
     ],
     points: [
       "O'level and no-certificate roles stay in the simple lane.",
@@ -71,7 +71,7 @@ export const homeSections: MarketingSection[] = [
     title: "Phone first, Lagos time, your account",
     paragraphs: [
       "The marketing site is public. The desk, certificates, resumes, and applications sit behind sign-in. This first release keeps that work in the browser session while the database tables are already in place.",
-      "Daily timing is meant for 06:00 West Africa Time. Until that job runs on a schedule, Today shows the sample shortlist plus anything you post in the session.",
+      "Daily timing is meant for 06:00 West Africa Time. Until that job runs on a schedule, the list is built when you press Search jobs.",
     ],
     points: [
       "Sign in from any page to open the dashboard.",
@@ -126,7 +126,7 @@ export const howSections: MarketingSection[] = [
     title: "Up to four profile roles, then O'level fills the rest",
     paragraphs: [
       "The intended morning job takes up to four roles that fit the whole profile, then fills toward seven with simple roles that pass the O'level rule. Companies are spread so you do not see seven versions of the same sales job.",
-      "Until that schedule is switched on, Today shows the labelled samples and any role you post during the session.",
+      "The list is built when you press Search jobs. It uses your name, state, certificates, and skills, and it stays empty until you ask.",
     ],
     points: [
       "Seen and applied roles drop off.",
@@ -223,7 +223,7 @@ export const seekerSections: MarketingSection[] = [
       "From-scratch is the same editor with three blank fields. Rename them. Add the ones a particular employer asked for, such as 'Expected salary' or 'Portfolio link'.",
     ],
     points: [
-      "Ten templates, all single column.",
+      "Ten templates, each with its own page design.",
       "AI can write a template or a blank page.",
       "You choose which document is attached to an application.",
     ],
@@ -238,7 +238,7 @@ export const seekerSections: MarketingSection[] = [
     points: [
       "Sign out from the dashboard header.",
       "Privacy and delete live in Settings.",
-      "Sample roles are marked so they are not mistaken for a live vacancy.",
+      "Jobs stay hidden until you search.",
     ],
   },
 ];
@@ -274,12 +274,12 @@ export const employerSections: MarketingSection[] = [
     kicker: "Who sees it",
     title: "Seekers in the right state see the card the same day",
     paragraphs: [
-      "A posted role is stored for the browser session in this build, and the database table is ready for the saved version. Seekers browsing Jobs can filter by state, work mode, and lane.",
+      "A posted role is stored on the account. Seekers see it only after they search, and only when their state and certificates fit.",
       "A degree-only role disappears when someone filters to O'level. A cashier role remains.",
     ],
     points: [
-      "Sample roles stay labelled.",
-      "Your role does not carry the Sample tag.",
+      "Search is what puts a role on the desk.",
+      "Your posting does not appear before a seeker asks.",
       "The match line tells the seeker the rule you set.",
     ],
   },
@@ -329,12 +329,11 @@ export const pricingSections: MarketingSection[] = [
     kicker: "Now",
     title: "The desk is free while the product is being built",
     paragraphs: [
-      "There is no charge for the account, the certificate review, the daily sample list, the ten templates, the from-scratch editor, or the AI draft.",
+      "There is no charge for the account, the certificate review, job search, the ten templates, the from-scratch editor, or the AI draft.",
       "Paying for a template pack or a larger rewrite allowance can come later. It is not switched on.",
     ],
     points: [
       "No card is required to sign in.",
-      "Sample jobs are part of the free walkthrough.",
       "Employer posting in this build is free.",
     ],
   },
@@ -382,7 +381,7 @@ export const pricingSections: MarketingSection[] = [
     title: "Companies are not billed in this release",
     paragraphs: [
       "Posting a role with a Gmail and a certificate rule costs nothing now. A later employer plan can cover more seats and a shared inbox. That plan is not on sale.",
-      "If you are hiring this month, use the free form and treat the sample cards as the product tour, not as applicants.",
+      "If you are hiring this month, use the free form. Seekers see the role after they search, when their details fit.",
     ],
     points: [
       "One company Gmail per role.",

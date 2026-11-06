@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ResumeSheet, previewDocument } from "@/components/resume-sheet";
 import { Button, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { makeFields, resumeTemplates, scratchFields } from "@/lib/templates";
@@ -33,7 +34,7 @@ export default function NewResumePage() {
       <PageHeader
         eyebrow="Resume"
         title="Start a resume or CV"
-        lede="Use one of the ten ATS templates, or open a blank page and name every section yourself. Both can be written with AI after you open the editor."
+        lede="Pick a designed page, or open a blank one and name every section yourself. The preview is the page you download, and both can be written with AI."
       />
       <div className="mb-5 flex gap-2">
         <button type="button" className={`rounded-full px-3 py-2 text-sm font-semibold ${mode === "template" ? "bg-[#1c1915] text-white" : "bg-white"}`} onClick={() => setMode("template")}>
@@ -48,12 +49,11 @@ export default function NewResumePage() {
         <div className="max-w-xl rounded-3xl border border-[#e4dccb] bg-[#fffdf8] p-5">
           <p className="font-display text-3xl">Blank page</p>
           <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">
-            You get a headline, a summary, and one empty section. Rename them, add the fields an employer asked for, and write every line yourself or with AI. The page stays one column so an applicant tracking system can read it.
+            You get a headline, a summary, and one empty section. Rename them, add fields, and write every line yourself or with AI. The preview on the next screen is the page you download.
           </p>
           <ul className="mt-4 space-y-2 text-sm">
-            <li>No columns, icons, or tables.</li>
             <li>Every heading is yours to rename.</li>
-            <li>Add a field for salary, referees, or a portfolio link.</li>
+            <li>The download uses the same page you see in the preview.</li>
           </ul>
         </div>
       ) : (
@@ -70,8 +70,13 @@ export default function NewResumePage() {
               </p>
               <p className="mt-1 font-display text-2xl">{template.name}</p>
               <p className="mt-2 text-sm leading-relaxed text-[#3d3832]">{template.audience}</p>
-              <p className="mt-2 text-sm text-[#5c564c]">{template.ats}</p>
-              <p className="mt-3 text-xs leading-relaxed text-[#5c564c]">{template.fields.map((field) => field.label).join(" · ")}</p>
+              <div className="mt-3 h-48 overflow-hidden rounded-xl bg-[#ece7dc]">
+                <div style={{ width: 222, height: 192, overflow: "hidden" }}>
+                  <div style={{ transform: "scale(0.28)", transformOrigin: "top left" }}>
+                    <ResumeSheet doc={previewDocument(template)} name="Ada Okonkwo" />
+                  </div>
+                </div>
+              </div>
             </button>
           ))}
         </div>

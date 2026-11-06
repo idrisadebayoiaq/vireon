@@ -80,6 +80,11 @@ function list(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function mergeDocs<T extends { id: string }>(saved: T[], local: T[]) {
+  const ids = new Set(saved.map((item) => item.id));
+  return [...local.filter((item) => !ids.has(item.id)), ...saved];
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<SessionState>(defaultState);
@@ -114,7 +119,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         profileRow = inserted.data;
       }
       employerId.current = employerRes.data?.id ?? "";
-      const jobs = (jobRes.data ?? []).map((row) => mapJob(row));
+      const jobs = (jobRes.data ?? []).map((row) => mapJob(row)).filter((job) => !job.sample);
       const emailByJob = new Map(jobs.map((job) => [job.id, job.applyEmail]));
 
       setState((current) => ({
@@ -125,7 +130,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         skills: (skillsRes.data ?? []).map(mapSkill),
         experiences: (experienceRes.data ?? []).map(mapExperience),
         certificates: (certificateRes.data ?? []).map(mapCertificate),
-        resumes: (resumeRes.data ?? []).map(mapResume),
+        resumes: mergeDocs((resumeRes.data ?? []).map(mapResume), current.resumes),
         applications: (applicationRes.data ?? []).map((row) => mapApplication(row, emailByJob.get(String(row.job_id)) ?? "")),
         jobs,
         todayJobs: current.todayJobs,
@@ -379,15 +384,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         resumeWrites.set(
           resume.id,
           setTimeout(() => {
-            void supabase.from("resumes").upsert({
-              id: resume.id,
-              user_id: userId.current,
-              kind: resume.kind,
-              template_id: resume.templateId,
-              title: resume.title,
-              sections: { contactLine: resume.contactLine, fields: resume.fields },
-              updated_at: new Date().toISOString(),
-            });
+            const owner = userId.current;
+            if (!owner) return;
+            void supabase
+              .from("resumes")
+              .upsert({
+                id: resume.id,
+                user_id: owner,
+                kind: resume.kind,
+                template_id: resume.templateId,
+                title: resume.title,
+                sections: { contactLine: resume.contactLine, fields: resume.fields },
+                updated_at: new Date().toISOString(),
+              })
+              .then(({ error }) => {
+                if (error) console.error(error.message);
+              });
           }, 400),
         );
       },

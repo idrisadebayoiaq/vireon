@@ -88,7 +88,7 @@ export default function JobDetailPage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader eyebrow={job.sample ? "Sample role" : "Posted in this session"} title={job.title} lede={`${job.company} · ${job.city}, ${job.state}`} />
+      <PageHeader eyebrow={job.company} title={job.title} lede={`${job.city}, ${job.state}`} />
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         <span className="rounded-full bg-[#efe8da] px-2 py-1">{job.lane === "olevel" ? "O'level" : "Profile"}</span>
         <span className="rounded-full bg-[#efe8da] px-2 py-1">{qualificationLine(job)}</span>

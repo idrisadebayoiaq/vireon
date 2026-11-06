@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import { JobCard } from "@/components/job-card";
-import { PageHeader } from "@/components/ui";
+import { Button, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
 
 export default function TodayPage() {
   const { state, ensureToday } = useStore();
+  const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const profileJobs = state.todayJobs.filter((job) => job.lane === "profile");
   const olevelJobs = state.settings.showOlevelLane ? state.todayJobs.filter((job) => job.lane === "olevel") : [];
   const confirmed = state.certificates.filter((item) => item.status === "confirmed").length;
@@ -15,13 +18,14 @@ export default function TodayPage() {
   const today = new Intl.DateTimeFormat("en-NG", { dateStyle: "full", timeZone: "Africa/Lagos" }).format(new Date());
   const place = [state.profile.city, state.profile.state].filter(Boolean).join(", ");
 
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (!state.authed || started.current) return;
-    started.current = true;
-    void ensureToday();
-  }, [state.authed, ensureToday]);
+  async function search() {
+    setSearching(true);
+    setSearchError("");
+    const message = await ensureToday();
+    setSearching(false);
+    setSearched(true);
+    if (message) setSearchError(message);
+  }
 
   const facts = [
     ["Name", state.profile.fullName || "Not set"],
@@ -33,12 +37,16 @@ export default function TodayPage() {
     ["Resumes and CVs", String(state.resumes.length)],
     ["Draft applications", String(drafts)],
     ["Sent applications", String(sent)],
-    ["Roles on this desk", String(profileJobs.length + olevelJobs.length)],
+    ["Roles on this desk", String(searched ? profileJobs.length + olevelJobs.length : 0)],
   ];
 
   return (
     <div>
-      <PageHeader eyebrow="Today" title="Your jobs for today" lede={`${today}. The list is saved for this Lagos day.`} />
+      <PageHeader
+        eyebrow="Today"
+        title="Your jobs for today"
+        lede={`${today}. Search uses your name, state, certificates, and skills. Nothing is listed until you ask.`}
+      />
       <dl className="mb-8 grid grid-cols-2 gap-2 md:grid-cols-5">
         {facts.map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-[#e4dccb] bg-[#fffdf8] px-3 py-3">
@@ -47,35 +55,44 @@ export default function TodayPage() {
           </div>
         ))}
       </dl>
-      {state.todayNote ? <p className="mb-6 rounded-2xl bg-[#efe8da] px-4 py-3 text-sm">{state.todayNote}</p> : null}
-      <section className="mb-8">
-        <h2 className="mb-3 font-display text-2xl">Matches your profile</h2>
-        {profileJobs.length === 0 ? (
-          <p className="text-sm text-[#5c564c]">No profile-lane roles in this list.</p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {profileJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        )}
-      </section>
-      {state.settings.showOlevelLane ? (
-        <section>
-          <h2 className="mb-3 font-display text-2xl">You can apply with your O&apos;level</h2>
-          {olevelJobs.length === 0 ? (
-            <p className="text-sm text-[#5c564c]">No O&apos;level roles in this list.</p>
+      <Button disabled={searching} onClick={search}>
+        {searching ? "Searching…" : "Search jobs"}
+      </Button>
+      {searchError ? <p className="mt-4 text-sm text-[#8a3d18]">{searchError}</p> : null}
+      {!searched ? <p className="mt-4 text-sm text-[#5c564c]">Roles stay hidden until you search.</p> : null}
+      {searched ? (
+        <>
+          {state.todayNote ? <p className="mt-6 rounded-2xl bg-[#efe8da] px-4 py-3 text-sm">{state.todayNote}</p> : null}
+          <section className="mt-8 mb-8">
+            <h2 className="mb-3 font-display text-2xl">Matches your profile</h2>
+            {profileJobs.length === 0 ? (
+              <p className="text-sm text-[#5c564c]">No profile roles match your details.</p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {profileJobs.map((job) => (
+                  <JobCard key={job.id} job={job} />
+                ))}
+              </div>
+            )}
+          </section>
+          {state.settings.showOlevelLane ? (
+            <section>
+              <h2 className="mb-3 font-display text-2xl">You can apply with your O&apos;level</h2>
+              {olevelJobs.length === 0 ? (
+                <p className="text-sm text-[#5c564c]">No O&apos;level roles match your details.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {olevelJobs.map((job) => (
+                    <JobCard key={job.id} job={job} />
+                  ))}
+                </div>
+              )}
+            </section>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {olevelJobs.map((job) => (
-                <JobCard key={job.id} job={job} />
-              ))}
-            </div>
+            <p className="text-sm text-[#5c564c]">The O&apos;level lane is hidden. Turn it back on in Settings.</p>
           )}
-        </section>
-      ) : (
-        <p className="text-sm text-[#5c564c]">The O&apos;level lane is hidden. Turn it back on in Settings.</p>
-      )}
+        </>
+      ) : null}
     </div>
   );
 }
