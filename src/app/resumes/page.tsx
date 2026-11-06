@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { TEMPLATE_LABEL } from "@/lib/types";
+import { templateName } from "@/lib/templates";
 
 export default function ResumesPage() {
   const { state } = useStore();
 
   return (
     <div>
-      <PageHeader title="Resume and CV" lede="Pick a template, write from your profile, then edit every line." />
+      <PageHeader
+        title="Resume and CV"
+        lede="Ten ATS templates, or a document you build from scratch. Edit every field, add your own, and write with AI."
+      />
       <Link href="/resumes/new" className="inline-flex min-h-11 items-center rounded-full bg-[#0e6b4f] px-4 text-sm font-semibold text-[#f7f3ea]">
         New document
       </Link>
@@ -23,7 +26,7 @@ export default function ResumesPage() {
               <Link href={`/resumes/${resume.id}`} className="block rounded-2xl border border-[#e4dccb] bg-[#fffdf8] p-4">
                 <p className="font-display text-2xl">{resume.title}</p>
                 <p className="text-sm text-[#5c564c]">
-                  {resume.kind === "cv" ? "CV" : "Resume"} · {TEMPLATE_LABEL[resume.templateId]} · {resume.updatedAt}
+                  {resume.kind === "cv" ? "CV" : "Resume"} · {templateName(resume.templateId)} · {resume.fields.length} fields · {resume.updatedAt}
                 </p>
               </Link>
             </li>

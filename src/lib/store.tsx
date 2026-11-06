@@ -11,12 +11,15 @@ import {
 import { sampleJobs } from "@/lib/sample-jobs";
 import {
   emptyProfile,
+  emptySettings,
   type Application,
   type Certificate,
+  type DeskSettings,
   type Experience,
   type Job,
   type Profile,
   type ResumeDoc,
+  type ResumeField,
   type Skill,
 } from "@/lib/types";
 
@@ -32,6 +35,7 @@ type SessionState = {
   postedJobs: Job[];
   resumes: ResumeDoc[];
   applications: Application[];
+  settings: DeskSettings;
 };
 
 type StoreValue = {
@@ -49,6 +53,7 @@ type StoreValue = {
   postJob: (job: Job) => void;
   saveResume: (resume: ResumeDoc) => void;
   saveApplication: (application: Application) => void;
+  saveSettings: (settings: DeskSettings) => void;
 };
 
 const defaultState = (): SessionState => ({
@@ -61,7 +66,72 @@ const defaultState = (): SessionState => ({
   postedJobs: [],
   resumes: [],
   applications: [],
+  settings: emptySettings(),
 });
+
+const legacyTemplates: Record<string, string> = {
+  classic: "entry-one-page",
+  compact: "professional-compact",
+  clean: "full-cv",
+};
+
+function migrateResume(raw: unknown): ResumeDoc | null {
+  if (!raw || typeof raw !== "object") return null;
+  const item = raw as Record<string, unknown>;
+  const id = typeof item.id === "string" ? item.id : crypto.randomUUID();
+  const kind = item.kind === "cv" ? "cv" : "resume";
+  const title = typeof item.title === "string" ? item.title : kind === "cv" ? "My CV" : "My resume";
+  const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : "";
+  const contactLine = typeof item.contactLine === "string" ? item.contactLine : "";
+
+  if (Array.isArray(item.fields)) {
+    const fields: ResumeField[] = item.fields.map((field) => {
+      const row = field as Record<string, unknown>;
+      return {
+        id: typeof row.id === "string" ? row.id : crypto.randomUUID(),
+        label: typeof row.label === "string" ? row.label : "Section",
+        value: typeof row.value === "string" ? row.value : "",
+        hint: typeof row.hint === "string" ? row.hint : "",
+      };
+    });
+    return {
+      id,
+      kind,
+      templateId: typeof item.templateId === "string" ? legacyTemplates[item.templateId] ?? item.templateId : "scratch",
+      title,
+      updatedAt,
+      contactLine,
+      fields,
+    };
+  }
+
+  const sections = (item.sections ?? {}) as Record<string, unknown>;
+  const text = (key: string) => {
+    const value = sections[key];
+    return typeof value === "string" ? value : "";
+  };
+  return {
+    id,
+    kind,
+    templateId: legacyTemplates[String(item.templateId)] ?? "entry-one-page",
+    title,
+    updatedAt,
+    contactLine,
+    fields: [
+      ["Headline", text("headline")],
+      ["Summary", text("summary")],
+      ["Certificates", text("certificates")],
+      ["Skills", text("skills")],
+      ["Experience", text("experience")],
+      ["Custom", text("custom")],
+    ].map(([label, value]) => ({
+      id: crypto.randomUUID(),
+      label,
+      value,
+      hint: "",
+    })),
+  };
+}
 
 const StoreContext = createContext<StoreValue | null>(null);
 
@@ -69,7 +139,13 @@ function loadState(): SessionState {
   const saved = sessionStorage.getItem(STORAGE_KEY);
   if (!saved) return defaultState();
   try {
-    return { ...defaultState(), ...JSON.parse(saved) };
+    const parsed = JSON.parse(saved) as Partial<SessionState>;
+    return {
+      ...defaultState(),
+      ...parsed,
+      settings: { ...emptySettings(), ...(parsed.settings ?? {}) },
+      resumes: Array.isArray(parsed.resumes) ? parsed.resumes.map(migrateResume).filter((item) => item !== null) : [],
+    };
   } catch {
     return defaultState();
   }
@@ -129,6 +205,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : [resume, ...state.resumes],
         });
       },
+      saveSettings: (settings) => patch({ settings }),
       saveApplication: (application) => {
         const exists = state.applications.some((item) => item.id === application.id);
         patch({

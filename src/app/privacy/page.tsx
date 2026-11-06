@@ -1,37 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { Button, PageHeader } from "@/components/ui";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 
 export default function PrivacyPage() {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="max-w-2xl">
-      <PageHeader title="Privacy" />
-      <div className="space-y-3 text-sm leading-relaxed text-[#3d3832]">
-        <p>Vireon stores your profile, result slips, resumes, and application text.</p>
-        <p>An application email is sent only after you tap Send.</p>
-        <p>In this first build, that information stays in this browser session. The database tables are ready for the next stage.</p>
-      </div>
-      <div className="mt-6">
-        <Button tone="secondary" onClick={() => setOpen(true)}>
-          Delete my account
-        </Button>
-      </div>
-      {open ? (
-        <div className="mt-4 rounded-3xl border border-[#e4dccb] bg-white p-5">
-          <h2 className="font-display text-2xl">Delete this account?</h2>
-          <p className="mt-2 text-sm text-[#5c564c]">
-            This confirmation is only a preview. Deleting the account is connected in the next stage.
-          </p>
-          <div className="mt-4">
-            <Button tone="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-          </div>
+    <div className="min-h-screen bg-[#f3efe4]">
+      <SiteHeader />
+      <main className="mx-auto max-w-3xl px-4 py-14">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#0e6b4f]">Privacy</p>
+        <h1 className="mt-3 font-display text-4xl">What Vireon keeps, and what it does not send.</h1>
+        <div className="mt-6 space-y-4 text-[15px] leading-relaxed text-[#3d3832]">
+          <p>The account holds your name, phone, state, city, skills, work history, result slips, resumes, and the letters you draft.</p>
+          <p>A result slip is used to confirm grades and to fill a resume you chose. It is not sold, and checker PINs are not collected.</p>
+          <p>An application email is sent only after you tap Send. In this build that connection is not live, so Send explains the next step and keeps the draft.</p>
+          <p>This first release stores the desk in the browser session. The database tables exist for the next stage, when an account can be deleted for real.</p>
+          <p>The model key used to draft a resume stays on the server. The browser asks for a draft and receives the text.</p>
         </div>
-      ) : null}
+      </main>
+      <SiteFooter />
     </div>
   );
 }

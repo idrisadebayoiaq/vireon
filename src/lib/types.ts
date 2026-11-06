@@ -74,22 +74,26 @@ export type Job = {
   missingSkills: string;
 };
 
-export type ResumeSections = {
-  headline: string;
-  summary: string;
-  certificates: string;
-  skills: string;
-  experience: string;
-  custom: string;
+export type ResumeField = {
+  id: string;
+  label: string;
+  value: string;
+  hint: string;
 };
 
 export type ResumeDoc = {
   id: string;
   kind: "resume" | "cv";
-  templateId: "classic" | "compact" | "clean";
+  templateId: string;
   title: string;
   updatedAt: string;
-  sections: ResumeSections;
+  contactLine: string;
+  fields: ResumeField[];
+};
+
+export type DeskSettings = {
+  jobAlerts: boolean;
+  showOlevelLane: boolean;
 };
 
 export type ApplicationStatus =
@@ -123,13 +127,9 @@ export const emptyProfile = (): Profile => ({
   nysc: "none",
 });
 
-export const emptySections = (): ResumeSections => ({
-  headline: "",
-  summary: "",
-  certificates: "",
-  skills: "",
-  experience: "",
-  custom: "",
+export const emptySettings = (): DeskSettings => ({
+  jobAlerts: true,
+  showOlevelLane: true,
 });
 
 export const SAMPLE_SUBJECTS: Omit<SubjectRow, "id">[] = [
@@ -157,12 +157,6 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   offer: "Offer",
   rejected: "Rejected",
 };
-
-export const TEMPLATE_LABEL = {
-  classic: "Classic",
-  compact: "Compact",
-  clean: "Clean",
-} as const;
 
 export function qualificationLine(job: Job) {
   if (job.qualification === "none") return "No certificate required";

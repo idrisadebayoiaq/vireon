@@ -6,32 +6,39 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useStore } from "@/lib/store";
 
 const links = [
+  { href: "/profile", label: "Profile" },
   { href: "/today", label: "Today" },
   { href: "/jobs", label: "Jobs" },
   { href: "/certificates", label: "Certificates" },
   { href: "/resumes", label: "Resume" },
   { href: "/applications", label: "Applications" },
-  { href: "/profile", label: "Profile" },
+  { href: "/settings", label: "Settings" },
 ];
+
+const publicPaths = ["/", "/how-it-works", "/job-seekers", "/for-employers", "/pricing", "/login", "/privacy"];
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { ready, state, signOut } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
-  const signedOutPage = pathname === "/login";
+  const isPublic = publicPaths.includes(pathname);
 
   useEffect(() => {
     if (!ready) return;
-    if (!state.authed && pathname !== "/login") router.replace("/login");
+    if (!state.authed && !isPublic) router.replace("/login");
     if (state.authed && pathname === "/login") router.replace("/today");
-  }, [ready, state.authed, pathname, router]);
+  }, [ready, state.authed, pathname, router, isPublic]);
 
   if (!ready) {
     return <div className="min-h-screen bg-[#f3efe4]" />;
   }
 
-  if (signedOutPage || !state.authed) {
+  if (!state.authed && !isPublic) {
+    return <div className="min-h-screen bg-[#f3efe4]" />;
+  }
+
+  if (isPublic) {
     return <div className="min-h-screen bg-[#f3efe4]">{children}</div>;
   }
 
@@ -52,11 +59,14 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
             {menuOpen ? (
               <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-[#e4dccb] bg-white p-2 shadow-none">
+                <Link className="block rounded-xl px-3 py-2 text-sm hover:bg-[#f3efe4]" href="/" onClick={() => setMenuOpen(false)}>
+                  Marketing site
+                </Link>
                 <Link className="block rounded-xl px-3 py-2 text-sm hover:bg-[#f3efe4]" href="/profile" onClick={() => setMenuOpen(false)}>
                   Profile
                 </Link>
-                <Link className="block rounded-xl px-3 py-2 text-sm hover:bg-[#f3efe4]" href="/privacy" onClick={() => setMenuOpen(false)}>
-                  Privacy
+                <Link className="block rounded-xl px-3 py-2 text-sm hover:bg-[#f3efe4]" href="/settings" onClick={() => setMenuOpen(false)}>
+                  Settings
                 </Link>
                 <button
                   type="button"

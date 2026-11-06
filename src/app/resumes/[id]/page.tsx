@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { Button, Field, PageHeader, controlClass } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { KIND_LABEL, TEMPLATE_LABEL, type ResumeSections } from "@/lib/types";
-
-const templateOrder = ["classic", "compact", "clean"] as const;
+import { makeFields, resumeTemplates, scratchFields, templateById, templateName } from "@/lib/templates";
+import type { ResumeDoc, ResumeField } from "@/lib/types";
 
 export default function ResumeEditorPage() {
   const params = useParams<{ id: string }>();
   const { state, saveResume } = useStore();
-  const resume = state.resumes.find((item) => item.id === params.id);
+  const record = state.resumes.find((item) => item.id === params.id);
+  const [instruction, setInstruction] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  if (!resume) {
+  if (!record) {
     return (
       <div>
         <PageHeader title="Document not found" />
@@ -24,90 +27,187 @@ export default function ResumeEditorPage() {
     );
   }
 
-  function updateSection(key: keyof ResumeSections, value: string) {
+  const current: ResumeDoc = record;
+
+  function stamp(next: ResumeDoc) {
     saveResume({
-      ...resume!,
+      ...next,
       updatedAt: new Date().toLocaleString("en-NG", { timeZone: "Africa/Lagos" }),
-      sections: { ...resume!.sections, [key]: value },
     });
   }
 
-  function writeFromProfile() {
-    const profile = state.profile;
-    const name = profile.fullName || "Your name";
-    const confirmed = state.certificates.filter((item) => item.status === "confirmed");
-    saveResume({
-      ...resume!,
-      updatedAt: new Date().toLocaleString("en-NG", { timeZone: "Africa/Lagos" }),
-      sections: {
-        ...resume!.sections,
-        headline: profile.headline || name,
-        summary: `${name} is based in ${profile.city || "a Nigerian city"}, ${profile.state || "Nigeria"}. Interests: ${profile.interests || "open to entry-level work"}. NYSC: ${profile.nysc}.`,
-        certificates: confirmed
-          .map((item) => `${KIND_LABEL[item.kind]} · ${item.examBody} · ${item.year}`)
-          .join("\n") || "No confirmed certificates yet.",
-        skills: state.skills.map((skill) => `${skill.name} (${skill.level})`).join(", ") || "No skills yet.",
-        experience:
-          state.experiences
-            .map((item) => `${item.title} at ${item.company}, ${item.city}. ${item.description}`)
-            .join("\n") || "No experience yet.",
-      },
+  function updateField(id: string, patch: Partial<ResumeField>) {
+    stamp({
+      ...current,
+      fields: current.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
     });
   }
 
-  const frame =
-    resume.templateId === "classic"
-      ? "border-t-4 border-[#1c1915] text-center"
-      : resume.templateId === "compact"
-        ? "text-sm"
-        : "border-l-4 border-[#0e6b4f] pl-4";
+  function retarget(nextId: string) {
+    const source = nextId === "scratch" ? scratchFields : (templateById(nextId)?.fields ?? scratchFields);
+    const template = templateById(nextId);
+    stamp({
+      ...current,
+      templateId: nextId,
+      kind: template?.document ?? current.kind,
+      fields: makeFields(source).map((field) => {
+        const match = current.fields.find((item) => item.label.trim().toLowerCase() === field.label.trim().toLowerCase());
+        return match ? { ...field, value: match.value } : field;
+      }),
+    });
+  }
+
+  async function writeWithAi() {
+    setError("");
+    setBusy(true);
+    try {
+      const response = await fetch("/api/resumes/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: current.kind,
+          templateName: templateName(current.templateId),
+          instruction,
+          profile: state.profile,
+          skills: state.skills,
+          experiences: state.experiences,
+          certificates: state.certificates.filter((item) => item.status === "confirmed"),
+          fields: current.fields.map((field) => ({ label: field.label, hint: field.hint })),
+        }),
+      });
+      const data = (await response.json()) as { values?: string[]; contactLine?: string; error?: string };
+      if (!response.ok || !data.values) {
+        throw new Error(data.error || "The draft did not come back.");
+      }
+      stamp({
+        ...current,
+        contactLine: data.contactLine || current.contactLine,
+        fields: current.fields.map((field, index) => ({
+          ...field,
+          value: data.values?.[index] ?? field.value,
+        })),
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The draft did not come back.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div>
-        <PageHeader title={resume.title} lede={`${resume.kind === "cv" ? "CV" : "Resume"} · ${TEMPLATE_LABEL[resume.templateId]}`} />
-        <div className="mb-4 flex flex-wrap gap-2">
-          {templateOrder.map((templateId) => (
+        <PageHeader
+          title={current.title}
+          lede={`${current.kind === "cv" ? "CV" : "Resume"} · ${templateName(current.templateId)} · single column, standard headings`}
+        />
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <Field label="Document title">
+            <input className={controlClass} value={current.title} onChange={(event) => stamp({ ...current, title: event.target.value })} />
+          </Field>
+          <Field label="Contact line">
+            <input
+              className={controlClass}
+              value={current.contactLine}
+              placeholder="City, phone, email"
+              onChange={(event) => stamp({ ...current, contactLine: event.target.value })}
+            />
+          </Field>
+        </div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#5c564c]">Structure</p>
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          <button type="button" className={`whitespace-nowrap rounded-full px-3 py-2 text-sm ${current.templateId === "scratch" ? "bg-[#0e6b4f] text-white" : "bg-white"}`} onClick={() => retarget("scratch")}>
+            From scratch
+          </button>
+          {resumeTemplates.map((template) => (
             <button
-              key={templateId}
+              key={template.id}
               type="button"
-              className={`rounded-full px-3 py-2 text-sm ${resume.templateId === templateId ? "bg-[#0e6b4f] text-white" : "bg-white"}`}
-              onClick={() => saveResume({ ...resume, templateId })}
+              className={`whitespace-nowrap rounded-full px-3 py-2 text-sm ${current.templateId === template.id ? "bg-[#0e6b4f] text-white" : "bg-white"}`}
+              onClick={() => retarget(template.id)}
             >
-              {TEMPLATE_LABEL[templateId]}
+              {template.name}
             </button>
           ))}
         </div>
+
         <div className="space-y-4">
-          {(
-            [
-              ["headline", "Headline"],
-              ["summary", "Summary"],
-              ["certificates", "Certificates"],
-              ["skills", "Skills"],
-              ["experience", "Experience"],
-              ["custom", "Custom section"],
-            ] as const
-          ).map(([key, label]) => (
-            <Field key={key} label={label}>
-              <textarea className={`${controlClass} min-h-24 py-3`} value={resume.sections[key]} onChange={(event) => updateSection(key, event.target.value)} />
-            </Field>
+          {current.fields.map((field, index) => (
+            <div key={field.id} className="rounded-3xl border border-[#e4dccb] bg-[#fffdf8] p-4">
+              <div className="mb-3 flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <Field label={`Field ${index + 1} heading`}>
+                    <input className={controlClass} value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} />
+                  </Field>
+                </div>
+                <button
+                  type="button"
+                  className="mb-0.5 min-h-11 rounded-full px-3 text-sm text-[#8a3d18]"
+                  onClick={() => stamp({ ...current, fields: current.fields.filter((item) => item.id !== field.id) })}
+                  disabled={current.fields.length === 1}
+                >
+                  Remove
+                </button>
+              </div>
+              {field.hint ? <p className="mb-2 text-xs leading-relaxed text-[#5c564c]">{field.hint}</p> : null}
+              <textarea className={`${controlClass} min-h-28 py-3`} value={field.value} onChange={(event) => updateField(field.id, { value: event.target.value })} />
+            </div>
           ))}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={writeFromProfile}>Write from my profile</Button>
-          <Button tone="ghost" disabled>
-            PDF download comes online in Part 2
+
+        <div className="mt-4">
+          <Button
+            tone="secondary"
+            onClick={() =>
+              stamp({
+                ...current,
+                fields: [
+                  ...current.fields,
+                  { id: crypto.randomUUID(), label: "New section", value: "", hint: "Rename this heading. Write the content, or ask the AI to fill it." },
+                ],
+              })
+            }
+          >
+            Add a field
           </Button>
         </div>
+
+        <div className="mt-6 rounded-3xl border border-[#e4dccb] bg-white p-4">
+          <Field label="Note for the AI">
+            <textarea
+              className={`${controlClass} min-h-20 py-3`}
+              value={instruction}
+              placeholder="Example: keep it to one page, mention the shop assistant role, and do not add a degree."
+              onChange={(event) => setInstruction(event.target.value)}
+            />
+          </Field>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={writeWithAi}>
+              {busy ? "Writing…" : "Write with AI"}
+            </Button>
+            <Button tone="ghost" disabled>
+              PDF download comes online in Part 2
+            </Button>
+          </div>
+          {error ? <p className="mt-3 text-sm text-[#8a3d18]">{error}</p> : null}
+          <p className="mt-3 text-xs leading-relaxed text-[#5c564c]">
+            The draft uses only your profile, skills, experience, and confirmed certificates. It will not invent an employer or a grade. You can edit every line after it returns.
+          </p>
+        </div>
       </div>
-      <aside className={`h-fit rounded-3xl bg-white p-5 ${frame}`}>
-        <p className="font-display text-2xl">{resume.sections.headline || "Headline"}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{resume.sections.summary}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm">{resume.sections.certificates}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm">{resume.sections.skills}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm">{resume.sections.experience}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm">{resume.sections.custom}</p>
+
+      <aside className="h-fit rounded-3xl border border-[#d9d0c0] bg-white p-6 text-[#1c1915]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5c564c]">ATS preview · one column</p>
+        <p className="mt-3 font-display text-3xl leading-tight">{state.profile.fullName || "Your name"}</p>
+        <p className="mt-1 text-sm text-[#3d3832]">{current.contactLine || "Add a contact line"}</p>
+        <div className="mt-4 space-y-4">
+          {current.fields.map((field) => (
+            <section key={field.id}>
+              <h2 className="border-b border-[#1c1915] pb-1 text-xs font-semibold uppercase tracking-[0.12em]">{field.label || "Section"}</h2>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{field.value || "This section is empty."}</p>
+            </section>
+          ))}
+        </div>
       </aside>
     </div>
   );
