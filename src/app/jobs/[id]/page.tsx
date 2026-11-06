@@ -16,6 +16,8 @@ export default function JobDetailPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [notice, setNotice] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftId] = useState(() => crypto.randomUUID());
 
   if (!job) {
     return (
@@ -28,19 +30,27 @@ export default function JobDetailPage() {
     );
   }
 
-  const resume = state.resumes.find((item) => item.id === resumeId);
-
-  function draftFromProfile() {
-    const name = state.profile.fullName || "Applicant";
-    setSubject(`Application for ${job!.title}`);
-    setBody(
-      `Hello,\n\nMy name is ${name}. I am applying for the ${job!.title} role at ${job!.company}. ${state.profile.headline || "I have added my details on Vireon."}\n\n${resume ? `I attached ${resume.title}.` : "I can share a resume from my Vireon account."}\n\nThank you,\n${name}`,
-    );
+  async function draftFromProfile() {
+    setDrafting(true);
+    setNotice("");
+    const response = await fetch("/api/applications/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId: job!.id, resumeId }),
+    });
+    const data = (await response.json()) as { subject?: string; body?: string; error?: string };
+    setDrafting(false);
+    if (!response.ok || !data.subject || !data.body) {
+      setNotice(data.error || "The draft did not come back.");
+      return;
+    }
+    setSubject(data.subject);
+    setBody(data.body);
   }
 
-  function saveDraft() {
-    saveApplication({
-      id: crypto.randomUUID(),
+  async function saveDraft() {
+    const message = await saveApplication({
+      id: draftId,
       jobId: job!.id,
       resumeId,
       channel: "email",
@@ -49,7 +59,31 @@ export default function JobDetailPage() {
       body,
       to: job!.applyEmail,
     });
-    setNotice("Draft saved. It is in Applications.");
+    setNotice(message ?? "Draft saved on your account.");
+  }
+
+  async function sendDraft() {
+    const saved = await saveApplication({
+      id: draftId,
+      jobId: job!.id,
+      resumeId,
+      channel: "email",
+      status: "draft",
+      subject,
+      body,
+      to: job!.applyEmail,
+    });
+    if (saved) {
+      setNotice(saved);
+      return;
+    }
+    const response = await fetch("/api/applications/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: draftId }),
+    });
+    const data = (await response.json()) as { error?: string };
+    setNotice(data.error || "Sent.");
   }
 
   return (
@@ -100,14 +134,11 @@ export default function JobDetailPage() {
               <textarea className={`${controlClass} min-h-40 py-3`} value={body} onChange={(event) => setBody(event.target.value)} />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Button tone="secondary" onClick={draftFromProfile}>
-                Draft with my details
+              <Button tone="secondary" disabled={drafting} onClick={draftFromProfile}>
+                {drafting ? "Writing…" : "Draft with my details"}
               </Button>
               <Button onClick={saveDraft}>Save draft</Button>
-              <Button
-                tone="ghost"
-                onClick={() => setNotice("This will send from your Gmail after mail is connected.")}
-              >
+              <Button tone="ghost" onClick={sendDraft}>
                 Send
               </Button>
             </div>
@@ -130,9 +161,26 @@ export default function JobDetailPage() {
             </select>
           </Field>
           {job.applyUrl ? (
-            <a className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[#0e6b4f]" href={job.applyUrl} target="_blank" rel="noreferrer">
+            <button
+              type="button"
+              className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[#0e6b4f]"
+              onClick={async () => {
+                const message = await saveApplication({
+                  id: crypto.randomUUID(),
+                  jobId: job.id,
+                  resumeId,
+                  channel: "external",
+                  status: "opened_external",
+                  subject: "",
+                  body: "",
+                  to: "",
+                });
+                setNotice(message ?? "Recorded as opened on the company site.");
+                window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
               Open posting
-            </a>
+            </button>
           ) : (
             <p className="mt-4 text-sm">This employer only left an email.</p>
           )}

@@ -1,22 +1,27 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { JobCard } from "@/components/job-card";
 import { PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
 
 export default function TodayPage() {
-  const { jobs, state } = useStore();
-  const profileJobs = jobs.filter((job) => job.lane === "profile").slice(0, 4);
-  const olevelJobs = state.settings.showOlevelLane ? jobs.filter((job) => job.lane === "olevel").slice(0, 7) : [];
-  const total = profileJobs.length + olevelJobs.length;
+  const { state, ensureToday } = useStore();
+  const profileJobs = state.todayJobs.filter((job) => job.lane === "profile");
+  const olevelJobs = state.settings.showOlevelLane ? state.todayJobs.filter((job) => job.lane === "olevel") : [];
   const confirmed = state.certificates.filter((item) => item.status === "confirmed").length;
   const drafts = state.applications.filter((item) => item.status === "draft").length;
   const sent = state.applications.filter((item) => item.status === "sent").length;
-  const today = new Intl.DateTimeFormat("en-NG", {
-    dateStyle: "full",
-    timeZone: "Africa/Lagos",
-  }).format(new Date());
+  const today = new Intl.DateTimeFormat("en-NG", { dateStyle: "full", timeZone: "Africa/Lagos" }).format(new Date());
   const place = [state.profile.city, state.profile.state].filter(Boolean).join(", ");
+
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!state.authed || started.current) return;
+    started.current = true;
+    void ensureToday();
+  }, [state.authed, ensureToday]);
 
   const facts = [
     ["Name", state.profile.fullName || "Not set"],
@@ -28,16 +33,12 @@ export default function TodayPage() {
     ["Resumes and CVs", String(state.resumes.length)],
     ["Draft applications", String(drafts)],
     ["Sent applications", String(sent)],
-    ["Roles on this desk", String(total)],
+    ["Roles on this desk", String(profileJobs.length + olevelJobs.length)],
   ];
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Today"
-        title="Your jobs for today"
-        lede={`${today}. Up to four profile roles, then O'level work if that lane is on.`}
-      />
+      <PageHeader eyebrow="Today" title="Your jobs for today" lede={`${today}. The list is saved for this Lagos day.`} />
       <dl className="mb-8 grid grid-cols-2 gap-2 md:grid-cols-5">
         {facts.map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-[#e4dccb] bg-[#fffdf8] px-3 py-3">
@@ -46,15 +47,11 @@ export default function TodayPage() {
           </div>
         ))}
       </dl>
-      {total < 5 ? (
-        <p className="mb-6 rounded-2xl bg-[#efe8da] px-4 py-3 text-sm">
-          Fewer roles today. Weak matches are left out.
-        </p>
-      ) : null}
+      {state.todayNote ? <p className="mb-6 rounded-2xl bg-[#efe8da] px-4 py-3 text-sm">{state.todayNote}</p> : null}
       <section className="mb-8">
         <h2 className="mb-3 font-display text-2xl">Matches your profile</h2>
         {profileJobs.length === 0 ? (
-          <p className="text-sm text-[#5c564c]">Fewer roles today. Weak matches are left out.</p>
+          <p className="text-sm text-[#5c564c]">No profile-lane roles in this list.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {profileJobs.map((job) => (
@@ -67,7 +64,7 @@ export default function TodayPage() {
         <section>
           <h2 className="mb-3 font-display text-2xl">You can apply with your O&apos;level</h2>
           {olevelJobs.length === 0 ? (
-            <p className="text-sm text-[#5c564c]">Fewer roles today. Weak matches are left out.</p>
+            <p className="text-sm text-[#5c564c]">No O&apos;level roles in this list.</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {olevelJobs.map((job) => (

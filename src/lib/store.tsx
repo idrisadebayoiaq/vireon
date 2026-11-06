@@ -1,14 +1,9 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { sampleJobs } from "@/lib/sample-jobs";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { mapApplication, mapCertificate, mapExperience, mapJob, mapProfile, mapResume, mapSettings, mapSkill } from "@/lib/map-rows";
+import { dedupeHash } from "@/lib/nigeria";
+import { createClient } from "@/lib/supabase/client";
 import {
   emptyProfile,
   emptySettings,
@@ -19,11 +14,8 @@ import {
   type Job,
   type Profile,
   type ResumeDoc,
-  type ResumeField,
   type Skill,
 } from "@/lib/types";
-
-const STORAGE_KEY = "vireon-session-v1";
 
 type SessionState = {
   authed: boolean;
@@ -32,29 +24,40 @@ type SessionState = {
   skills: Skill[];
   experiences: Experience[];
   certificates: Certificate[];
-  postedJobs: Job[];
   resumes: ResumeDoc[];
   applications: Application[];
   settings: DeskSettings;
+  jobs: Job[];
+  todayJobs: Job[];
+  todayNote: string;
 };
 
 type StoreValue = {
   ready: boolean;
   state: SessionState;
   jobs: Job[];
-  signIn: (email: string) => void;
-  signOut: () => void;
-  saveProfile: (profile: Profile) => void;
-  addSkill: (skill: Skill) => void;
-  removeSkill: (id: string) => void;
-  saveExperience: (experience: Experience) => void;
-  removeExperience: (id: string) => void;
-  saveCertificate: (certificate: Certificate) => void;
-  postJob: (job: Job) => void;
+  signOut: () => Promise<void>;
+  saveProfile: (profile: Profile) => Promise<string | null>;
+  addSkill: (skill: Skill) => Promise<string | null>;
+  removeSkill: (id: string) => Promise<void>;
+  saveExperience: (experience: Experience) => Promise<string | null>;
+  removeExperience: (id: string) => Promise<void>;
+  createCertificate: (input: {
+    kind: Certificate["kind"];
+    examBody: string;
+    year: string;
+    examNumber: string;
+    file: File;
+  }) => Promise<{ id?: string; error?: string }>;
+  saveCertificate: (certificate: Certificate) => Promise<string | null>;
+  postJob: (job: Job) => Promise<string | null>;
   saveResume: (resume: ResumeDoc) => void;
-  saveApplication: (application: Application) => void;
-  saveSettings: (settings: DeskSettings) => void;
+  saveApplication: (application: Application) => Promise<string | null>;
+  saveSettings: (settings: DeskSettings) => Promise<string | null>;
+  ensureToday: () => Promise<string | null>;
 };
+
+const resumeWrites = new Map<string, ReturnType<typeof setTimeout>>();
 
 const defaultState = (): SessionState => ({
   authed: false,
@@ -63,156 +66,370 @@ const defaultState = (): SessionState => ({
   skills: [],
   experiences: [],
   certificates: [],
-  postedJobs: [],
   resumes: [],
   applications: [],
   settings: emptySettings(),
+  jobs: [],
+  todayJobs: [],
+  todayNote: "",
 });
-
-const legacyTemplates: Record<string, string> = {
-  classic: "entry-one-page",
-  compact: "professional-compact",
-  clean: "full-cv",
-};
-
-function migrateResume(raw: unknown): ResumeDoc | null {
-  if (!raw || typeof raw !== "object") return null;
-  const item = raw as Record<string, unknown>;
-  const id = typeof item.id === "string" ? item.id : crypto.randomUUID();
-  const kind = item.kind === "cv" ? "cv" : "resume";
-  const title = typeof item.title === "string" ? item.title : kind === "cv" ? "My CV" : "My resume";
-  const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : "";
-  const contactLine = typeof item.contactLine === "string" ? item.contactLine : "";
-
-  if (Array.isArray(item.fields)) {
-    const fields: ResumeField[] = item.fields.map((field) => {
-      const row = field as Record<string, unknown>;
-      return {
-        id: typeof row.id === "string" ? row.id : crypto.randomUUID(),
-        label: typeof row.label === "string" ? row.label : "Section",
-        value: typeof row.value === "string" ? row.value : "",
-        hint: typeof row.hint === "string" ? row.hint : "",
-      };
-    });
-    return {
-      id,
-      kind,
-      templateId: typeof item.templateId === "string" ? legacyTemplates[item.templateId] ?? item.templateId : "scratch",
-      title,
-      updatedAt,
-      contactLine,
-      fields,
-    };
-  }
-
-  const sections = (item.sections ?? {}) as Record<string, unknown>;
-  const text = (key: string) => {
-    const value = sections[key];
-    return typeof value === "string" ? value : "";
-  };
-  return {
-    id,
-    kind,
-    templateId: legacyTemplates[String(item.templateId)] ?? "entry-one-page",
-    title,
-    updatedAt,
-    contactLine,
-    fields: [
-      ["Headline", text("headline")],
-      ["Summary", text("summary")],
-      ["Certificates", text("certificates")],
-      ["Skills", text("skills")],
-      ["Experience", text("experience")],
-      ["Custom", text("custom")],
-    ].map(([label, value]) => ({
-      id: crypto.randomUUID(),
-      label,
-      value,
-      hint: "",
-    })),
-  };
-}
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-function loadState(): SessionState {
-  const saved = sessionStorage.getItem(STORAGE_KEY);
-  if (!saved) return defaultState();
-  try {
-    const parsed = JSON.parse(saved) as Partial<SessionState>;
-    return {
-      ...defaultState(),
-      ...parsed,
-      settings: { ...emptySettings(), ...(parsed.settings ?? {}) },
-      resumes: Array.isArray(parsed.resumes) ? parsed.resumes.map(migrateResume).filter((item) => item !== null) : [],
-    };
-  } catch {
-    return defaultState();
-  }
+function list(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<SessionState>(defaultState);
+  const userId = useRef("");
+  const employerId = useRef("");
+  const loadId = useRef(0);
 
   useEffect(() => {
-    setState(loadState());
-    setReady(true);
+    const supabase = createClient();
+
+    async function load(id: string, email: string) {
+      const token = ++loadId.current;
+      userId.current = id;
+      setState((current) => ({ ...current, authed: true, email }));
+      setReady(true);
+      const [profileRes, skillsRes, experienceRes, certificateRes, resumeRes, applicationRes, jobRes, employerRes] =
+        await Promise.all([
+          supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
+          supabase.from("skills").select("*").eq("user_id", id).order("created_at"),
+          supabase.from("experiences").select("*").eq("user_id", id).order("created_at"),
+          supabase.from("certificates").select("*, certificate_subjects(*)").eq("user_id", id).order("created_at", { ascending: false }),
+          supabase.from("resumes").select("*").eq("user_id", id).order("updated_at", { ascending: false }),
+          supabase.from("applications").select("*").eq("user_id", id).order("created_at", { ascending: false }),
+          supabase.from("jobs").select("*").eq("is_active", true).order("created_at", { ascending: false }),
+          supabase.from("employers").select("id").eq("owner_id", id).maybeSingle(),
+        ]);
+      if (token !== loadId.current) return;
+
+      let profileRow = profileRes.data;
+      if (!profileRow) {
+        const inserted = await supabase.from("profiles").insert({ id }).select("*").single();
+        profileRow = inserted.data;
+      }
+      employerId.current = employerRes.data?.id ?? "";
+      const jobs = (jobRes.data ?? []).map((row) => mapJob(row));
+      const emailByJob = new Map(jobs.map((job) => [job.id, job.applyEmail]));
+
+      setState((current) => ({
+        authed: true,
+        email,
+        profile: profileRow ? mapProfile(profileRow) : emptyProfile(),
+        settings: profileRow ? mapSettings(profileRow) : emptySettings(),
+        skills: (skillsRes.data ?? []).map(mapSkill),
+        experiences: (experienceRes.data ?? []).map(mapExperience),
+        certificates: (certificateRes.data ?? []).map(mapCertificate),
+        resumes: (resumeRes.data ?? []).map(mapResume),
+        applications: (applicationRes.data ?? []).map((row) => mapApplication(row, emailByJob.get(String(row.job_id)) ?? "")),
+        jobs,
+        todayJobs: current.todayJobs,
+        todayNote: current.todayNote,
+      }));
+      setReady(true);
+    }
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        userId.current = "";
+        setState(defaultState());
+        setReady(true);
+        return;
+      }
+      void load(data.user.id, data.user.email ?? "");
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      if (!session?.user) {
+        loadId.current += 1;
+        userId.current = "";
+        employerId.current = "";
+        setState(defaultState());
+        setReady(true);
+        return;
+      }
+      void load(session.user.id, session.user.email ?? "");
+    });
+
+    return () => data.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [ready, state]);
-
   const value = useMemo<StoreValue>(() => {
-    const patch = (partial: Partial<SessionState>) =>
-      setState((current) => ({ ...current, ...partial }));
+    const supabase = createClient();
+
+    async function replaceSubjects(certificate: Certificate) {
+      await supabase.from("certificate_subjects").delete().eq("certificate_id", certificate.id);
+      const rows = certificate.subjects.filter((subject) => subject.subject.trim());
+      if (rows.length === 0) return null;
+      const { error } = await supabase.from("certificate_subjects").insert(
+        rows.map((subject) => ({
+          id: subject.id,
+          certificate_id: certificate.id,
+          subject: subject.subject.trim(),
+          grade: subject.grade.trim(),
+        })),
+      );
+      return error?.message ?? null;
+    }
 
     return {
       ready,
       state,
-      jobs: [...state.postedJobs, ...sampleJobs],
-      signIn: (email) => patch({ authed: true, email }),
-      signOut: () => patch({ authed: false }),
-      saveProfile: (profile) => patch({ profile }),
-      addSkill: (skill) => patch({ skills: [...state.skills, skill] }),
-      removeSkill: (id) => patch({ skills: state.skills.filter((skill) => skill.id !== id) }),
-      saveExperience: (experience) => {
-        const exists = state.experiences.some((item) => item.id === experience.id);
-        patch({
-          experiences: exists
-            ? state.experiences.map((item) => (item.id === experience.id ? experience : item))
-            : [...state.experiences, experience],
-        });
+      jobs: state.jobs,
+      signOut: async () => {
+        await supabase.auth.signOut();
+        userId.current = "";
+        setState(defaultState());
       },
-      removeExperience: (id) =>
-        patch({ experiences: state.experiences.filter((item) => item.id !== id) }),
-      saveCertificate: (certificate) => {
-        const exists = state.certificates.some((item) => item.id === certificate.id);
-        patch({
-          certificates: exists
-            ? state.certificates.map((item) => (item.id === certificate.id ? certificate : item))
-            : [...state.certificates, certificate],
-        });
+      saveProfile: async (profile) => {
+        if (!profile.fullName.trim()) return "Add your full name.";
+        if (profile.phone.replace(/\D/g, "").length < 10) return "Enter a phone number with at least 10 digits.";
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            full_name: profile.fullName.trim(),
+            phone: profile.phone.trim(),
+            state: profile.state,
+            lga: profile.lga,
+            city: profile.city.trim(),
+            headline: profile.headline.trim(),
+            career_interests: profile.interests.trim(),
+            nysc_status: profile.nysc,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", userId.current);
+        if (error) return error.message;
+        setState((current) => ({ ...current, profile: { ...profile, fullName: profile.fullName.trim() } }));
+        return null;
       },
-      postJob: (job) => patch({ postedJobs: [job, ...state.postedJobs] }),
+      addSkill: async (skill) => {
+        const { error } = await supabase.from("skills").insert({
+          id: skill.id,
+          user_id: userId.current,
+          name: skill.name,
+          level: skill.level,
+        });
+        if (error) return error.message;
+        setState((current) => ({ ...current, skills: [...current.skills, skill] }));
+        return null;
+      },
+      removeSkill: async (id) => {
+        await supabase.from("skills").delete().eq("id", id);
+        setState((current) => ({ ...current, skills: current.skills.filter((skill) => skill.id !== id) }));
+      },
+      saveExperience: async (experience) => {
+        if (!experience.title.trim()) return "Add the job title.";
+        const row = {
+          id: experience.id,
+          user_id: userId.current,
+          title: experience.title.trim(),
+          company: experience.company.trim(),
+          city: experience.city.trim(),
+          start_date: experience.startDate || null,
+          end_date: experience.endDate || null,
+          is_current: experience.current,
+          description: experience.description.trim(),
+        };
+        const { error } = await supabase.from("experiences").upsert(row);
+        if (error) return error.message;
+        setState((current) => {
+          const exists = current.experiences.some((item) => item.id === experience.id);
+          return {
+            ...current,
+            experiences: exists
+              ? current.experiences.map((item) => (item.id === experience.id ? experience : item))
+              : [...current.experiences, experience],
+          };
+        });
+        return null;
+      },
+      removeExperience: async (id) => {
+        await supabase.from("experiences").delete().eq("id", id);
+        setState((current) => ({ ...current, experiences: current.experiences.filter((item) => item.id !== id) }));
+      },
+      createCertificate: async (input) => {
+        const id = crypto.randomUUID();
+        const path = `${userId.current}/${id}`;
+        const { error } = await supabase.from("certificates").insert({
+          id,
+          user_id: userId.current,
+          kind: input.kind,
+          exam_body: input.examBody,
+          year: input.year,
+          exam_number: input.examNumber,
+          file_path: path,
+          status: "pending_review",
+        });
+        if (error) return { error: error.message };
+        const uploaded = await supabase.storage.from("certificate-slips").upload(path, input.file, {
+          upsert: true,
+          contentType: input.file.type || "application/octet-stream",
+        });
+        if (uploaded.error) return { error: uploaded.error.message, id };
+        const response = await fetch("/api/certificates/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const data = (await response.json()) as { subjects?: Certificate["subjects"]; examBody?: string; year?: string; error?: string };
+        const certificate: Certificate = {
+          id,
+          kind: input.kind,
+          examBody: data.examBody || input.examBody,
+          year: data.year || input.year,
+          examNumber: input.examNumber,
+          fileName: input.file.name,
+          status: "pending_review",
+          subjects: Array.isArray(data.subjects) ? data.subjects : [],
+        };
+        await supabase
+          .from("certificates")
+          .update({ exam_body: certificate.examBody, year: certificate.year })
+          .eq("id", id);
+        const subjectError = await replaceSubjects(certificate);
+        setState((current) => ({ ...current, certificates: [certificate, ...current.certificates] }));
+        return { id, error: subjectError ?? (!response.ok ? data.error : undefined) };
+      },
+      saveCertificate: async (certificate) => {
+        const { error } = await supabase
+          .from("certificates")
+          .update({
+            kind: certificate.kind,
+            exam_body: certificate.examBody,
+            year: certificate.year,
+            exam_number: certificate.examNumber,
+            status: certificate.status,
+          })
+          .eq("id", certificate.id);
+        if (error) return error.message;
+        const subjectError = await replaceSubjects(certificate);
+        if (subjectError) return subjectError;
+        setState((current) => ({
+          ...current,
+          certificates: current.certificates.some((item) => item.id === certificate.id)
+            ? current.certificates.map((item) => (item.id === certificate.id ? certificate : item))
+            : [certificate, ...current.certificates],
+        }));
+        return null;
+      },
+      postJob: async (job) => {
+        let owner = employerId.current;
+        if (!owner) {
+          const created = await supabase
+            .from("employers")
+            .insert({ owner_id: userId.current, company_name: job.company, contact_email: job.applyEmail })
+            .select("id")
+            .single();
+          if (created.error || !created.data) return created.error?.message ?? "The employer record was not created.";
+          owner = created.data.id;
+          employerId.current = owner;
+        }
+        const hash = await dedupeHash(job.company, job.title, job.city);
+        const row = {
+          employer_id: owner,
+          source: "employer",
+          dedupe_hash: hash,
+          title: job.title,
+          company_name: job.company,
+          description: job.description,
+          state: job.state,
+          city: job.city,
+          work_mode: job.workMode,
+          salary_text: job.salary,
+          employment_type: job.employmentType,
+          apply_email: job.applyEmail,
+          apply_url: job.applyUrl || null,
+          qualification_min: job.qualification,
+          english_credit: job.englishCredit,
+          maths_credit: job.mathsCredit,
+          min_credits: job.minCredits,
+          required_subjects: list(job.requiredSubjects),
+          required_skills: list(job.requiredSkills),
+          category: job.lane,
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          is_active: true,
+        };
+        const inserted = await supabase.from("jobs").insert(row).select("*").single();
+        if (inserted.error) {
+          if (inserted.error.code === "23505") return "This company, title, and city are already listed.";
+          return inserted.error.message;
+        }
+        const saved = mapJob(inserted.data);
+        setState((current) => ({ ...current, jobs: [saved, ...current.jobs] }));
+        return null;
+      },
       saveResume: (resume) => {
-        const exists = state.resumes.some((item) => item.id === resume.id);
-        patch({
-          resumes: exists
-            ? state.resumes.map((item) => (item.id === resume.id ? resume : item))
-            : [resume, ...state.resumes],
+        setState((current) => {
+          const exists = current.resumes.some((item) => item.id === resume.id);
+          return {
+            ...current,
+            resumes: exists
+              ? current.resumes.map((item) => (item.id === resume.id ? resume : item))
+              : [resume, ...current.resumes],
+          };
         });
+        const pending = resumeWrites.get(resume.id);
+        if (pending) clearTimeout(pending);
+        resumeWrites.set(
+          resume.id,
+          setTimeout(() => {
+            void supabase.from("resumes").upsert({
+              id: resume.id,
+              user_id: userId.current,
+              kind: resume.kind,
+              template_id: resume.templateId,
+              title: resume.title,
+              sections: { contactLine: resume.contactLine, fields: resume.fields },
+              updated_at: new Date().toISOString(),
+            });
+          }, 400),
+        );
       },
-      saveSettings: (settings) => patch({ settings }),
-      saveApplication: (application) => {
-        const exists = state.applications.some((item) => item.id === application.id);
-        patch({
-          applications: exists
-            ? state.applications.map((item) => (item.id === application.id ? application : item))
-            : [application, ...state.applications],
+      saveApplication: async (application) => {
+        const { error } = await supabase.from("applications").upsert({
+          id: application.id,
+          user_id: userId.current,
+          job_id: application.jobId || null,
+          resume_id: application.resumeId || null,
+          channel: application.channel,
+          status: application.status,
+          subject: application.subject,
+          body: application.body,
+          sent_at: application.status === "sent" ? new Date().toISOString() : null,
         });
+        if (error) return error.message;
+        setState((current) => {
+          const exists = current.applications.some((item) => item.id === application.id);
+          return {
+            ...current,
+            applications: exists
+              ? current.applications.map((item) => (item.id === application.id ? application : item))
+              : [application, ...current.applications],
+          };
+        });
+        return null;
+      },
+      saveSettings: async (settings) => {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ job_alerts: settings.jobAlerts, show_olevel_lane: settings.showOlevelLane })
+          .eq("id", userId.current);
+        if (error) return error.message;
+        setState((current) => ({ ...current, settings }));
+        return null;
+      },
+      ensureToday: async () => {
+        const response = await fetch("/api/picks/today", { method: "POST" });
+        const data = (await response.json()) as { jobs?: Job[]; note?: string; error?: string };
+        if (!response.ok) return data.error || "The morning list did not load.";
+        setState((current) => ({ ...current, todayJobs: data.jobs ?? [], todayNote: data.note ?? "" }));
+        return null;
       },
     };
   }, [ready, state]);

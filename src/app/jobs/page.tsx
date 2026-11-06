@@ -27,7 +27,7 @@ export default function JobsPage() {
     <div>
       <PageHeader
         title="Jobs"
-        lede="Sample roles are marked. Jobs you post in this session show up here too."
+        lede="Curated examples are marked Sample. Roles an employer posts are saved and stay on this list."
       />
       <div className="mb-5 grid gap-3 md:grid-cols-3">
         <Field label="State">

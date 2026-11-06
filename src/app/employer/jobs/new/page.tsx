@@ -27,14 +27,14 @@ export default function NewEmployerJobPage() {
   const [requiredSkills, setRequiredSkills] = useState("");
   const [error, setError] = useState("");
 
-  function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!title.trim() || !company.trim() || !email.trim()) {
       setError("Add a title, company, and Gmail.");
       return;
     }
     const lane = laneForQualification(qualification);
-    postJob({
+    const message = await postJob({
       id: crypto.randomUUID(),
       sample: false,
       title: title.trim(),
@@ -60,12 +60,16 @@ export default function NewEmployerJobPage() {
           : "Posted in this session. This role asks for more than O'level.",
       missingSkills: requiredSkills || "None listed",
     });
+    if (message) {
+      setError(message);
+      return;
+    }
     router.push("/jobs");
   }
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="New job" lede="This role stays in the current browser session and shows on Jobs and Today." />
+      <PageHeader title="New job" lede="This role is saved. Seekers in the matching state can see it on Jobs, and the morning list can pick it up." />
       <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
         <Field label="Title">
           <input className={controlClass} value={title} onChange={(event) => setTitle(event.target.value)} />

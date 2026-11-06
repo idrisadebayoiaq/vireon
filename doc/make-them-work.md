@@ -16,10 +16,10 @@ Re-check those ids and prices on OpenRouter before coding them in. Prices move.
 
 ## Step 1 — Real accounts
 
-- [ ] Turn on email and password auth in the Supabase project.
-- [ ] Replace the pretend session with Supabase Auth on `/login`, the auth callback, and sign out.
-- [ ] On first sign-in, create a `profiles` row for that user.
-- [ ] Send the signed-in user to `/today`.
+- [x] Turn on email and password auth in the Supabase project.
+- [x] Replace the pretend session with Supabase Auth on `/login`, the auth callback, and sign out.
+- [x] On first sign-in, create a `profiles` row for that user.
+- [x] Send the signed-in user to `/today`.
 
 Done when: a new email can sign up, sign out, sign in again, and still has one profile row.
 
@@ -27,20 +27,20 @@ Done when: a new email can sign up, sign out, sign in again, and still has one p
 
 Add policies so the anon key is safe in the browser.
 
-- [ ] A user can read and write only their own `profiles`, `skills`, `experiences`, `certificates`, `certificate_subjects`, `resumes`, `applications`, and `daily_picks`.
-- [ ] A user can read `ng_states` and `ng_lgas`.
-- [ ] A seeker can read jobs where `is_active` is true.
-- [ ] An employer can insert and update only jobs tied to their `employers` row.
-- [ ] `gmail_connections` has no policy for the browser. Only the server, with the service role, reads it.
+- [x] A user can read and write only their own `profiles`, `skills`, `experiences`, `certificates`, `certificate_subjects`, `resumes`, `applications`, and `daily_picks`.
+- [x] A user can read `ng_states` and `ng_lgas`.
+- [x] A seeker can read jobs where `is_active` is true.
+- [x] An employer can insert and update only jobs tied to their `employers` row.
+- [x] `gmail_connections` has no policy for the browser. Only the server, with the service role, reads it.
 - [ ] Storage: a user can upload and read only files under their own folder in `certificate-slips` and `resumes`.
 
 Done when: a second test user cannot read the first user's certificates or slips.
 
 ## Step 3 — Save the profile
 
-- [ ] Load and save profile, skills, and experience from Supabase.
-- [ ] Keep the state and LGA dropdowns on `ng_states` and `ng_lgas`. Seed those tables if Step 4 of Part 1 left them empty.
-- [ ] Validate phone and required name before save.
+- [x] Load and save profile, skills, and experience from Supabase.
+- [x] Keep the state and LGA dropdowns on `ng_states` and `ng_lgas`. Seed those tables if Step 4 of Part 1 left them empty.
+- [x] Validate phone and required name before save.
 
 Done when: edits survive a refresh and a new browser session.
 
@@ -80,14 +80,14 @@ Done when: the curated roles are queryable, one allowed source adds new rows, an
 
 ## Step 7 — Daily 5–7 picks
 
-- [ ] A scheduled function runs at 06:00 `Africa/Lagos`.
-- [ ] For each user who has a confirmed certificate or a finished profile, build that day's picks.
-- [ ] Skip jobs already in `daily_picks` or `applications`, jobs past `expires_at`, and jobs outside the user's state unless `work_mode` is remote.
-- [ ] Profile lane: the job's qualification minimum is at or below the user's highest confirmed certificate, then sort by matching skills and same city.
-- [ ] O'level lane: category `olevel`, and the user's confirmed O'level meets the English, Mathematics, credit count, and subject rule. Keep this lane after they add an ND, HND, or degree.
-- [ ] Take up to 4 profile jobs. Fill until there are 7 using the O'level lane. Prefer different companies. If fewer than 5 jobs pass, store only those.
-- [ ] Call DeepSeek Flash only for the chosen cards, to fill `match_reason` and `missing_skills`.
-- [ ] `/today` reads `daily_picks` for today's date and still shows the two group headings.
+- [ ] A scheduled function runs at 06:00 `Africa/Lagos`. The list is built on the first visit after 06:00 until a scheduler is connected.
+- [x] For each user who has a confirmed certificate or a finished profile, build that day's picks.
+- [x] Skip jobs already in `daily_picks` or `applications`, jobs past `expires_at`, and jobs outside the user's state unless `work_mode` is remote.
+- [x] Profile lane: the job's qualification minimum is at or below the user's highest confirmed certificate, then sort by matching skills and same city.
+- [x] O'level lane: category `olevel`, and the user's confirmed O'level meets the English, Mathematics, credit count, and subject rule. Keep this lane after they add an ND, HND, or degree.
+- [x] Take up to 4 profile jobs. Fill until there are 7 using the O'level lane. Prefer different companies. If fewer than 5 jobs pass, store only those.
+- [x] Call DeepSeek Flash only for the chosen cards, to fill `match_reason` and `missing_skills`.
+- [x] `/today` reads `daily_picks` for today's date and still shows the two group headings.
 
 Done when: two users in different states get different lists on the same morning, each list has at most 7 jobs, and an O'level role remains after a degree is confirmed.
 

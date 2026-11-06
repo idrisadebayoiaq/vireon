@@ -185,8 +185,37 @@ export default function ResumeEditorPage() {
             <Button disabled={busy} onClick={writeWithAi}>
               {busy ? "Writing…" : "Write with AI"}
             </Button>
-            <Button tone="ghost" disabled>
-              PDF download comes online in Part 2
+            <Button
+              tone="ghost"
+              onClick={async () => {
+                setError("");
+                const response = await fetch("/api/resumes/pdf", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: current.id,
+                    title: current.title,
+                    kind: current.kind,
+                    templateId: current.templateId,
+                    contactLine: current.contactLine,
+                    fields: current.fields,
+                  }),
+                });
+                if (!response.ok) {
+                  const data = (await response.json()) as { error?: string };
+                  setError(data.error || "The PDF was not created.");
+                  return;
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${current.title || "resume"}.pdf`;
+                link.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download PDF
             </Button>
           </div>
           {error ? <p className="mt-3 text-sm text-[#8a3d18]">{error}</p> : null}

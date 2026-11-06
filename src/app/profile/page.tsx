@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const { states, fromSupabase } = useLocations();
   const [profile, setProfile] = useState<Profile>(state.profile);
   const [saved, setSaved] = useState(false);
+  const [formError, setFormError] = useState("");
   const [skillName, setSkillName] = useState("");
   const [skillLevel, setSkillLevel] = useState("Comfortable");
   const [experience, setExperience] = useState<Experience>(blankExperience());
@@ -49,10 +50,11 @@ export default function ProfilePage() {
       </p>
       <form
         className="grid gap-4 md:grid-cols-2"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          saveProfile(profile);
-          setSaved(true);
+          const message = await saveProfile(profile);
+          setFormError(message ?? "");
+          setSaved(!message);
         }}
       >
         <Field label="Full name">
@@ -107,7 +109,8 @@ export default function ProfilePage() {
         </div>
         <div className="md:col-span-2 flex items-center gap-3">
           <Button type="submit">Save profile</Button>
-          {saved ? <p className="text-sm text-[#0e6b4f]">Saved for this session.</p> : null}
+          {saved ? <p className="text-sm text-[#0e6b4f]">Saved to your account.</p> : null}
+          {formError ? <p className="text-sm text-[#8a3d18]">{formError}</p> : null}
         </div>
       </form>
 

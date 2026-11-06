@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 export default function SettingsPage() {
   const { state, saveSettings, signOut } = useStore();
   const [open, setOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const settings = state.settings;
 
   return (
@@ -15,7 +16,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="How this desk behaves"
-        lede="These choices stay in this browser until the account is saved to the database."
+        lede="These choices are saved on your account."
       />
 
       <section className="space-y-3 rounded-3xl border border-[#e4dccb] bg-[#fffdf8] p-5">
@@ -63,11 +64,25 @@ export default function SettingsPage() {
           <div className="rounded-2xl bg-[#f3efe4] p-4">
             <p className="font-display text-2xl">Delete this account?</p>
             <p className="mt-2 text-sm text-[#5c564c]">
-              This confirmation is a preview. Removing the stored account is connected in the next stage. Nothing is deleted now.
+              This removes your profile, certificates, resumes, applications, and the sign-in. It cannot be undone.
             </p>
-            <div className="mt-3">
+            <div className="mt-3 flex gap-2">
+              <Button
+                onClick={async () => {
+                  const response = await fetch("/api/account/delete", { method: "POST" });
+                  const data = (await response.json()) as { error?: string };
+                  if (!response.ok) {
+                    setDeleteError(data.error || "The account was not deleted.");
+                    return;
+                  }
+                  await signOut();
+                }}
+              >
+                Delete account
+              </Button>
               <Button tone="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             </div>
+            {deleteError ? <p className="mt-3 text-sm text-[#8a3d18]">{deleteError}</p> : null}
           </div>
         ) : null}
       </section>
